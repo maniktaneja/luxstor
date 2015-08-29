@@ -112,8 +112,8 @@ func main() {
 	}
 
 	bucketMap["serverList"] = hosts
-	//bucketMap["luxmap"] = strings.Join(vbmap[0], ";") + "," + strings.Join(vbmap[1], ";")
-	bucketMap["luxmap"] = "0:" + strings.Join(vbmap[0], ";") + ", 1:" + strings.Join(vbmap[1], ";")
+	bucketMap["luxmap"] = strings.Join(vbmap[0], ";") + "," + strings.Join(vbmap[1], ";")
+	//bucketMap["luxmap"] = "0:" + strings.Join(vbmap[0], ";") + ", 1:" + strings.Join(vbmap[1], ";")
 
 	fmt.Println("vbmap:", bucketMap)
 
@@ -161,8 +161,8 @@ func main() {
 			}
 
 			bucketMap["serverList"] = strings.Join(servers, ",")
-			//bucketMap["luxmap"] = strings.Join(vbmap[0], ";") + "," + strings.Join(vbmap[1], ";")
-			bucketMap["luxmap"] = "0:" + strings.Join(vbmap[0], ";") + ", 1:" + strings.Join(vbmap[1], ";")
+			bucketMap["luxmap"] = strings.Join(vbmap[0], ";") + "," + strings.Join(vbmap[1], ";")
+			//bucketMap["luxmap"] = "0:" + strings.Join(vbmap[0], ";") + ", 1:" + strings.Join(vbmap[1], ";")
 			fmt.Printf("%#v\n", nodes)
 			time.Sleep(time.Second)
 		}
