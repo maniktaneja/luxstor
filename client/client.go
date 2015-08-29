@@ -6,6 +6,7 @@ import (
 	"github.com/couchbase/gomemcached"
 	"github.com/couchbase/gomemcached/client"
 	"log"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -18,19 +19,30 @@ func main() {
 	var wg sync.WaitGroup
 
 	memServer := fmt.Sprintf("%s:%d", *server, *port)
-	client, err := memcached.Connect("tcp", memServer)
-	if err != nil {
-		log.Printf(" Unable to connect to %v, error %v", memServer, err)
-		return
-	}
 
 	log.Printf(" Connected to server %v", memServer)
 
-	for j := 0; j < 16; j++ {
-		go func() {
-			for i := 0; i < 1000000; i++ {
+	var c []*memcached.Client
 
-				now := time.Now()
+	for j := 0; j < runtime.GOMAXPROCS(0); j++ {
+		client, err := memcached.Connect("tcp", memServer)
+		if err != nil {
+			log.Printf(" Unable to connect to %v, error %v", memServer, err)
+			return
+		}
+
+		c = append(c, client)
+	}
+	n := 100000
+	now := time.Now()
+	for j := 0; j < runtime.GOMAXPROCS(0); j++ {
+		wg.Add(1)
+		go func(offset int) {
+			defer wg.Done()
+			client := c[offset]
+
+			for i := 0; i < n; i++ {
+
 				res, err := client.Set(0, "test"+string(i), 0, 0, []byte("this is a test"))
 				if err != nil || res.Status != gomemcached.SUCCESS {
 					log.Printf("Set failed. Error %v", err)
@@ -42,15 +54,16 @@ func main() {
 					log.Printf("Get failed. Error %v", err)
 					return
 				}
-				elapsed := time.Since(now)
-				log.Printf(" Time %v", elapsed)
+
+				//				log.Printf(" Time %v", elapsed)
 			}
-			wg.Done()
-		}()
-		wg.Add(1)
+		}(j)
 	}
 
 	wg.Wait()
+	elapsed := time.Since(now)
+	ops := runtime.GOMAXPROCS(0) * n
+	log.Printf("sets:%d, gets:%d time_taken:%v\n", ops, ops, elapsed)
 
 	//log.Printf("Get returned %v", res)
 

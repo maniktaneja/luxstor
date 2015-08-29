@@ -48,7 +48,7 @@ func initMemdb() *luxStor {
 
 func worker(id int, jobs <-chan *job) {
 	for j := range jobs {
-		log.Printf("Worker id %d", id)
+		//log.Printf("Worker id %d", id)
 		j.res <- dispatch(j.req, j.s)
 	}
 }
@@ -65,7 +65,7 @@ func RunServer(input chan chanReq) {
 	//s.data = make(map[string]gomemcached.MCItem)
 	s = initMemdb()
 
-	jobQueue := make(chan *job, 100)
+	jobQueue := make(chan *job, 500000)
 	for i := 0; i < runtime.NumCPU()*2; i++ {
 		go worker(i, jobQueue)
 	}
