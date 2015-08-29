@@ -9,9 +9,11 @@ import (
 
 	"github.com/couchbase/gomemcached"
 	"github.com/couchbase/gomemcached/server"
+	"github.com/maniktaneja/luxstor/replica"
 )
 
 var port = flag.Int("port", 11212, "Port on which to listen")
+var clusterMgr = flag.String("clusterMgr", "http://localhost:8091/", "Cluster manager url")
 
 type chanReq struct {
 	req *gomemcached.MCRequest
@@ -58,6 +60,7 @@ func waitForConnections(ls net.Listener) {
 
 func main() {
 	flag.Parse()
+	replica.Init(*clusterMgr)
 	ls, e := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if e != nil {
 		log.Fatalf("Got an error:  %s", e)
