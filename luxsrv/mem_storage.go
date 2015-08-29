@@ -46,17 +46,39 @@ func initMemdb() *luxStor {
 	return ls
 }
 
+func worker(id int, jobs <-chan *job) {
+	for j := range jobs {
+		log.Printf("Worker id %d", id)
+		j.res <- dispatch(j.req, j.s)
+	}
+}
+
+type job struct {
+	req *gomemcached.MCRequest
+	res chan *gomemcached.MCResponse
+	s   *luxStor
+}
+
 // RunServer runs the cache server.
 func RunServer(input chan chanReq) {
 	var s *luxStor
 	//s.data = make(map[string]gomemcached.MCItem)
 	s = initMemdb()
+
+	jobQueue := make(chan *job, 100)
+	for i := 0; i < runtime.NumCPU()*2; i++ {
+		go worker(i, jobQueue)
+	}
+
 	for {
-		go func() {
-			req := <-input
-			//log.Printf("Got a request: %s", req.req)
-			req.res <- dispatch(req.req, s)
-		}()
+
+		j := &job{}
+		req := <-input
+		//log.Printf("Got a request: %s", req.req)
+		j.req = req.req
+		j.res = req.res
+		j.s = s
+		jobQueue <- j
 	}
 }
 
