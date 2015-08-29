@@ -22,18 +22,21 @@ func main() {
 
 	log.Printf(" Connected to server %v", memServer)
 
-	res, err := client.Set(0, "test", 0, 0, []byte("this is a test"))
-	if err != nil || res.Status != gomemcached.SUCCESS {
-		log.Printf("Set failed. Error %v", err)
-		return
+	for i := 0; i < 1000000; i++ {
+
+		res, err := client.Set(0, "test"+string(i), 0, 0, []byte("this is a test"))
+		if err != nil || res.Status != gomemcached.SUCCESS {
+			log.Printf("Set failed. Error %v", err)
+			return
+		}
+
+		res, err = client.Get(0, "test"+string(i))
+		if err != nil || res.Status != gomemcached.SUCCESS {
+			log.Printf("Get failed. Error %v", err)
+			return
+		}
 	}
 
-	res, err = client.Get(0, "test")
-	if err != nil || res.Status != gomemcached.SUCCESS {
-		log.Printf("Get failed. Error %v", err)
-		return
-	}
-
-	log.Printf("Get returned %v", res)
+	//log.Printf("Get returned %v", res)
 
 }

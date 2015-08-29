@@ -48,7 +48,7 @@ func waitForConnections(ls net.Listener) {
 	for {
 		s, e := ls.Accept()
 		if e == nil {
-			log.Printf("Got a connection from %v", s.RemoteAddr())
+			//log.Printf("Got a connection from %v", s.RemoteAddr())
 			go connectionHandler(s, handler)
 		} else {
 			log.Printf("Error accepting from %s", ls)

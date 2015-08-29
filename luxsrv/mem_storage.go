@@ -3,7 +3,10 @@ package main
 import (
 	"encoding/binary"
 	"github.com/couchbase/gomemcached"
+	"github.com/maniktaneja/luxstor/memstore"
+	"github.com/scryner/lfreequeue"
 	"log"
+	"runtime"
 )
 
 type storage struct {
@@ -11,7 +14,7 @@ type storage struct {
 	cas  uint64
 }
 
-type handler func(req *gomemcached.MCRequest, s *storage) *gomemcached.MCResponse
+type handler func(req *gomemcached.MCRequest, s *luxStor) *gomemcached.MCResponse
 
 var handlers = map[gomemcached.CommandCode]handler{
 	gomemcached.SET:    handleSet,
@@ -20,18 +23,42 @@ var handlers = map[gomemcached.CommandCode]handler{
 	gomemcached.FLUSH:  handleFlush,
 }
 
+type luxStor struct {
+	memdb     *memstore.MemStore
+	workQueue *lfreequeue.Queue
+}
+
+// init memdb
+func initMemdb() *luxStor {
+
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	ls := &luxStor{memdb: memstore.New()}
+	ls.memdb.SetKeyComparator(byteItemKeyCompare)
+	ls.workQueue = lfreequeue.NewQueue()
+
+	// create a queue of writers
+	for i := 0; i < 128; i++ {
+		w := ls.memdb.NewWriter()
+		ls.workQueue.Enqueue(w)
+	}
+
+	return ls
+}
+
 // RunServer runs the cache server.
 func RunServer(input chan chanReq) {
-	var s storage
-	s.data = make(map[string]gomemcached.MCItem)
+	var s *luxStor
+	//s.data = make(map[string]gomemcached.MCItem)
+	s = initMemdb()
 	for {
 		req := <-input
-		log.Printf("Got a request: %s", req.req)
-		req.res <- dispatch(req.req, &s)
+		//log.Printf("Got a request: %s", req.req)
+		req.res <- dispatch(req.req, s)
 	}
 }
 
-func dispatch(req *gomemcached.MCRequest, s *storage) (rv *gomemcached.MCResponse) {
+func dispatch(req *gomemcached.MCRequest, s *luxStor) (rv *gomemcached.MCResponse) {
 	if h, ok := handlers[req.Opcode]; ok {
 		rv = h(req, s)
 	} else {
@@ -40,54 +67,105 @@ func dispatch(req *gomemcached.MCRequest, s *storage) (rv *gomemcached.MCRespons
 	return
 }
 
-func notFound(req *gomemcached.MCRequest, s *storage) *gomemcached.MCResponse {
+func notFound(req *gomemcached.MCRequest, s *luxStor) *gomemcached.MCResponse {
 	var response gomemcached.MCResponse
 	response.Status = gomemcached.UNKNOWN_COMMAND
 	return &response
 }
 
-func handleSet(req *gomemcached.MCRequest, s *storage) (ret *gomemcached.MCResponse) {
+func handleSet(req *gomemcached.MCRequest, s *luxStor) (ret *gomemcached.MCResponse) {
 	ret = &gomemcached.MCResponse{}
-	var item gomemcached.MCItem
 
-	item.Flags = binary.BigEndian.Uint32(req.Extras)
-	item.Expiration = binary.BigEndian.Uint32(req.Extras[4:])
-	item.Data = req.Body
-	ret.Status = gomemcached.SUCCESS
-	s.cas++
-	item.Cas = s.cas
-	ret.Cas = s.cas
-
-	s.data[string(req.Key)] = item
-	return
-}
-
-func handleGet(req *gomemcached.MCRequest, s *storage) (ret *gomemcached.MCResponse) {
-	ret = &gomemcached.MCResponse{}
-	if item, ok := s.data[string(req.Key)]; ok {
+	/*
+		item.Flags = binary.BigEndian.Uint32(req.Extras)
+		item.Expiration = binary.BigEndian.Uint32(req.Extras[4:])
+		item.Data = req.Body
 		ret.Status = gomemcached.SUCCESS
-		ret.Extras = make([]byte, 4)
-		binary.BigEndian.PutUint32(ret.Extras, item.Flags)
-		ret.Cas = item.Cas
-		ret.Body = item.Data
-	} else {
-		ret.Status = gomemcached.KEY_ENOENT
+		s.cas++
+		item.Cas = s.cas
+		ret.Cas = s.cas
+	*/
+
+	data := newByteItem(req.Key, req.Body)
+	itm := memstore.NewItem(data)
+
+	var worker *memstore.Writer
+	var w interface{}
+	var done bool
+
+	i := 0
+	for {
+		w, done = s.workQueue.Dequeue()
+		if done == true {
+			break
+		}
+		i++
 	}
+
+	log.Printf("got worker after %d", i)
+
+	switch w := w.(type) {
+	case *memstore.Writer:
+		worker = w
+	default:
+		log.Printf("Not good !")
+	}
+
+	worker.Put(itm)
+	s.workQueue.Enqueue(worker)
+
 	return
 }
 
-func handleFlush(req *gomemcached.MCRequest, s *storage) (ret *gomemcached.MCResponse) {
+func handleGet(req *gomemcached.MCRequest, s *luxStor) (ret *gomemcached.MCResponse) {
+	ret = &gomemcached.MCResponse{}
+
+	var worker *memstore.Writer
+	var w interface{}
+	var done bool
+
+	for {
+		w, done = s.workQueue.Dequeue()
+		if done == true {
+			break
+		}
+	}
+
+	switch w := w.(type) {
+	case *memstore.Writer:
+		worker = w
+	default:
+		log.Printf("Not good !")
+	}
+
+	defer s.workQueue.Enqueue(worker)
+
+	data := newByteItem(req.Key, nil)
+	itm := memstore.NewItem(data)
+	gotItm := worker.Get(itm)
+	if gotItm == nil {
+		ret.Status = gomemcached.KEY_ENOENT
+	} else {
+		bItem := byteItem(gotItm.Bytes())
+		ret.Body = bItem.Value()
+		ret.Status = gomemcached.SUCCESS
+	}
+
+	return
+}
+
+func handleFlush(req *gomemcached.MCRequest, s *luxStor) (ret *gomemcached.MCResponse) {
 	ret = &gomemcached.MCResponse{}
 	delay := binary.BigEndian.Uint32(req.Extras)
 	if delay > 0 {
 		log.Printf("Delay not supported (got %d)", delay)
 	}
-	s.data = make(map[string]gomemcached.MCItem)
+	//s.data = make(map[string]gomemcached.MCItem)
 	return
 }
 
-func handleDelete(req *gomemcached.MCRequest, s *storage) (ret *gomemcached.MCResponse) {
+func handleDelete(req *gomemcached.MCRequest, s *luxStor) (ret *gomemcached.MCResponse) {
 	ret = &gomemcached.MCResponse{}
-	delete(s.data, string(req.Key))
+	//delete(s.data, string(req.Key))
 	return
 }
