@@ -1,16 +1,9 @@
 package memstore
 
 import (
-	"bufio"
 	"bytes"
-	"encoding/binary"
 	"errors"
-	"io"
 	"math/rand"
-	"os"
-	"path"
-	"runtime"
-	"sync"
 	"sync/atomic"
 )
 
