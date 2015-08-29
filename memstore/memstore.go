@@ -280,9 +280,12 @@ func (it *Iterator) Close() {
 }
 
 func (m *MemStore) NewIterator(snap *Snapshot) *Iterator {
-	if !snap.Open() {
+	if snap == nil {
+		snap = &Snapshot{sn: m.getCurrSn()}
+	} else if !snap.Open() {
 		return nil
 	}
+
 	buf := snap.db.store.MakeBuf()
 	return &Iterator{
 		snap: snap,
