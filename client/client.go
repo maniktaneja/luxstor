@@ -6,6 +6,7 @@ import (
 	"github.com/couchbase/gomemcached"
 	"github.com/couchbase/gomemcached/client"
 	"log"
+	"time"
 )
 
 var server = flag.String("server", "localhost", "server URL")
@@ -24,6 +25,7 @@ func main() {
 
 	for i := 0; i < 1000000; i++ {
 
+		now := time.Now()
 		res, err := client.Set(0, "test"+string(i), 0, 0, []byte("this is a test"))
 		if err != nil || res.Status != gomemcached.SUCCESS {
 			log.Printf("Set failed. Error %v", err)
@@ -35,6 +37,8 @@ func main() {
 			log.Printf("Get failed. Error %v", err)
 			return
 		}
+		elapsed := time.Since(now)
+		log.Printf(" Time %v", elapsed)
 	}
 
 	//log.Printf("Get returned %v", res)
