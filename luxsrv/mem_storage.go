@@ -52,9 +52,11 @@ func RunServer(input chan chanReq) {
 	//s.data = make(map[string]gomemcached.MCItem)
 	s = initMemdb()
 	for {
-		req := <-input
-		//log.Printf("Got a request: %s", req.req)
-		req.res <- dispatch(req.req, s)
+		go func() {
+			req := <-input
+			//log.Printf("Got a request: %s", req.req)
+			req.res <- dispatch(req.req, s)
+		}()
 	}
 }
 
@@ -101,8 +103,6 @@ func handleSet(req *gomemcached.MCRequest, s *luxStor) (ret *gomemcached.MCRespo
 		}
 		i++
 	}
-
-	log.Printf("got worker after %d", i)
 
 	switch w := w.(type) {
 	case *memstore.Writer:
