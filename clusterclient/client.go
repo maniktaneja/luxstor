@@ -13,6 +13,17 @@ type Map struct {
 	} `json:"nodes"`
 }
 
+var nodeMap *Map
+
+func RunClient(cluster string) {
+
+	// update nodeMap every second
+}
+
+func GetMap() *Map {
+	return nodeMap
+}
+
 func Connect(clusterURL string) (string, error) {
 
 	resp, err := http.Get(clusterURL)
