@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"time"
 )
 
 type Map struct {
@@ -13,32 +14,27 @@ type Map struct {
 	} `json:"nodes"`
 }
 
-var nodeMap *Map
+var nodeMap string
 
-func RunClient(cluster string) {
+func RunClient(clusterURL string) {
+	go func() {
+		for {
+			resp, err := http.Get(clusterURL)
+			if err != nil {
+				nodeMap = ""
+			}
 
-	// update nodeMap every second
+			defer resp.Body.Close()
+			body, err := ioutil.ReadAll(resp.Body)
+
+			var nodes Map
+			json.Unmarshal([]byte(string(body)), &nodes)
+			nodeMap = nodes.Node.LuxMap
+		}
+		time.Sleep(1 * time.Second)
+	}()
 }
 
-func GetMap() *Map {
+func GetMap() string {
 	return nodeMap
-}
-
-func Connect(clusterURL string) (string, error) {
-
-	resp, err := http.Get(clusterURL)
-	if err != nil {
-		return "", err
-	}
-
-	//Need to handle this in-case cluster manager dies
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-
-	var nodes Map
-	json.Unmarshal([]byte(string(body)), &nodes)
-	vbmap := nodes.Node.LuxMap
-
-	return vbmap, nil
 }

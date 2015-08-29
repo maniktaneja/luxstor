@@ -13,7 +13,7 @@ const vbucketCount = 2
 func getVbucketNode(vbid int) []string {
 	var vbmap string
 	//Connect to cluster manager
-	vbmap, _ = client.Connect("http://localhost:8091/nodes")
+	vbmap, _ = client.RunClient("http://localhost:8091/nodes")
 	nodes := strings.Split(vbmap, ",")
 	return strings.Split(nodes[vbid], ";")
 }
