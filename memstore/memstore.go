@@ -298,6 +298,22 @@ func (m *MemStore) ItemsCount() int64 {
 	return atomic.LoadInt64(&m.count)
 }
 
+func (m *MemStore) Rollback(snap *Snapshot) {
+	buf1 := m.snapshots.MakeBuf()
+	buf2 := m.snapshots.MakeBuf()
+	iter := m.store.NewSLIterator(m.iterCmp, buf1)
+	iter.SeekFirst()
+	for ; iter.Valid(); iter.Next() {
+		itm := iter.Get().(*Item)
+		if itm.bornSn > snap.sn || itm.deadSn > snap.sn {
+			m.store.Delete(itm, m.insCmp, buf2)
+		}
+	}
+
+	m.currSn = snap.sn
+	m.lastGCSn = snap.sn - 1
+}
+
 func (m *MemStore) collectDead(sn uint32) {
 	buf1 := m.snapshots.MakeBuf()
 	buf2 := m.snapshots.MakeBuf()
