@@ -1,6 +1,6 @@
-package skiplist
+package memstore
 
-type Iterator struct {
+type SLIterator struct {
 	cmp        CompareFn
 	s          *Skiplist
 	prev, curr *Node
@@ -8,23 +8,23 @@ type Iterator struct {
 	buf        *ActionBuffer
 }
 
-func (s *Skiplist) NewIterator(cmp CompareFn,
-	buf *ActionBuffer) *Iterator {
+func (s *Skiplist) NewSLIterator(cmp CompareFn,
+	buf *ActionBuffer) *SLIterator {
 
-	return &Iterator{
+	return &SLIterator{
 		cmp: cmp,
 		s:   s,
 		buf: buf,
 	}
 }
 
-func (it *Iterator) SeekFirst() {
+func (it *SLIterator) SeekFirst() {
 	it.prev = it.s.head
 	it.curr, _ = it.s.head.getNext(0)
 	it.valid = true
 }
 
-func (it *Iterator) Seek(itm Item) bool {
+func (it *SLIterator) Seek(itm SLItem) bool {
 	it.valid = true
 	found := it.s.findPath(itm, it.cmp, it.buf)
 	it.prev = it.buf.preds[0]
@@ -32,7 +32,7 @@ func (it *Iterator) Seek(itm Item) bool {
 	return found
 }
 
-func (it *Iterator) Valid() bool {
+func (it *SLIterator) Valid() bool {
 	if it.valid && it.curr == it.s.tail {
 		it.valid = false
 	}
@@ -40,15 +40,11 @@ func (it *Iterator) Valid() bool {
 	return it.valid
 }
 
-func (it *Iterator) Get() Item {
+func (it *SLIterator) Get() SLItem {
 	return it.curr.itm
 }
 
-func (it *Iterator) MarkDeletion() {
-	it.s.softDelete(it.curr)
-}
-
-func (it *Iterator) Next() {
+func (it *SLIterator) Next() {
 retry:
 	it.valid = true
 	next, deleted := it.curr.getNext(0)

@@ -1,4 +1,4 @@
-package skiplist
+package memstore
 
 import (
 	"math/rand"
@@ -9,9 +9,17 @@ import (
 const MaxLevel = 32
 const p = 0.25
 
-type Item interface{}
+type SLItem interface{}
 
-type CompareFn func(Item, Item) int
+func compare(cmp CompareFn, this, that SLItem) int {
+	if this == nil {
+		return 1
+	}
+
+	return cmp(this, that)
+}
+
+type CompareFn func(SLItem, SLItem) int
 
 type Skiplist struct {
 	head  *Node
@@ -20,7 +28,7 @@ type Skiplist struct {
 	stats stats
 }
 
-func New() *Skiplist {
+func NewSkiplist() *Skiplist {
 	head := newNode(nil, MaxLevel)
 	tail := newNode(nil, MaxLevel)
 
@@ -48,13 +56,9 @@ func (s *Skiplist) MakeBuf() *ActionBuffer {
 	}
 }
 
-// TODO: Use sync pool
-func (s *Skiplist) FreeBuf(b *ActionBuffer) {
-}
-
 type Node struct {
 	next []unsafe.Pointer
-	itm  Item
+	itm  SLItem
 }
 
 func (n Node) getLevel() int {
@@ -66,7 +70,7 @@ type NodeRef struct {
 	ptr     *Node
 }
 
-func newNode(itm Item, level int) *Node {
+func newNode(itm SLItem, level int) *Node {
 	return &Node{
 		next: make([]unsafe.Pointer, level+1),
 		itm:  itm,
@@ -123,7 +127,7 @@ func (s *Skiplist) helpDelete(level int, prev, curr, next *Node) bool {
 	return prev.dcasNext(level, curr, next, false, false)
 }
 
-func (s *Skiplist) findPath(itm Item, cmp CompareFn,
+func (s *Skiplist) findPath(itm SLItem, cmp CompareFn,
 	buf *ActionBuffer) (found bool) {
 	var cmpVal int = 1
 
@@ -164,11 +168,11 @@ retry:
 	return
 }
 
-func (s *Skiplist) Insert(itm Item, cmp CompareFn, buf *ActionBuffer) {
+func (s *Skiplist) Insert(itm SLItem, cmp CompareFn, buf *ActionBuffer) {
 	s.Insert2(itm, cmp, buf, rand.Float32)
 }
 
-func (s *Skiplist) Insert2(itm Item, cmp CompareFn,
+func (s *Skiplist) Insert2(itm SLItem, cmp CompareFn,
 	buf *ActionBuffer, randFn func() float32) {
 
 	itemLevel := s.randomLevel(randFn)
@@ -195,9 +199,14 @@ retry:
 	}
 }
 
-func (s *Skiplist) softDelete(delNode *Node) bool {
+func (s *Skiplist) Delete(itm SLItem, cmp CompareFn, buf *ActionBuffer) bool {
 	var deleteMarked bool
+	found := s.findPath(itm, cmp, buf)
+	if !found {
+		return false
+	}
 
+	delNode := buf.succs[0]
 	targetLevel := delNode.getLevel()
 	for i := targetLevel; i >= 0; i-- {
 		next, deleted := delNode.getNext(i)
@@ -207,17 +216,7 @@ func (s *Skiplist) softDelete(delNode *Node) bool {
 		}
 	}
 
-	return deleteMarked
-}
-
-func (s *Skiplist) Delete(itm Item, cmp CompareFn, buf *ActionBuffer) bool {
-	found := s.findPath(itm, cmp, buf)
-	if !found {
-		return false
-	}
-
-	delNode := buf.succs[0]
-	if s.softDelete(delNode) {
+	if deleteMarked {
 		s.findPath(itm, cmp, buf)
 		atomic.AddInt64(&s.stats.levelNodesCount[delNode.getLevel()], -1)
 		return true
