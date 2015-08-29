@@ -17,22 +17,20 @@ type Map struct {
 var nodeMap string
 
 func RunClient(clusterURL string) {
-	go func() {
-		for {
-			resp, err := http.Get(clusterURL)
-			if err != nil {
-				nodeMap = ""
-			}
-
-			defer resp.Body.Close()
-			body, err := ioutil.ReadAll(resp.Body)
-
-			var nodes Map
-			json.Unmarshal([]byte(string(body)), &nodes)
-			nodeMap = nodes.Node.LuxMap
+	for {
+		resp, err := http.Get(clusterURL)
+		if err != nil {
+			nodeMap = ""
 		}
+
+		defer resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
+
+		var nodes Map
+		json.Unmarshal([]byte(string(body)), &nodes)
+		nodeMap = nodes.Node.LuxMap
 		time.Sleep(1 * time.Second)
-	}()
+	}
 }
 
 func GetMap() string {

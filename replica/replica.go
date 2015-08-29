@@ -18,18 +18,19 @@ var repChan chan *repItem
 var connPool map[string]*connectionPool
 var ipList []string
 
-func Init() {
+func Init(url string) {
 	repChan = make(chan *repItem, 100000)
 	ipList := GetMyIp()
 	if len(ipList) < 1 {
 		log.Printf("Warning, iplist is empty")
 	}
+	go client.RunClient(url + "/nodes")
 }
 
 func getVbucketNode(vbid int) string {
 	var vbmap string
 	//Connect to cluster manager
-	vbmap, _ = client.Connect("http://localhost:8091/nodes")
+	vbmap = client.GetMap()
 	nodes := strings.Split(vbmap, ",")
 	return nodes[vbid]
 }
