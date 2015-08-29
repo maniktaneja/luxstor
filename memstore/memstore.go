@@ -279,7 +279,7 @@ func (m *MemStore) NewIterator(snap *Snapshot) *Iterator {
 		return nil
 	}
 
-	buf := snap.db.store.MakeBuf()
+	buf := m.store.MakeBuf()
 	return &Iterator{
 		snap: snap,
 		iter: m.store.NewSLIterator(m.iterCmp, buf),
