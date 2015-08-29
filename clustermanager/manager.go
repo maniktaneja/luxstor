@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"hash/fnv"
 	"log"
 	"net"
 	"net/http"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 const vbucketCount=2
 
 type NodeStatus struct {
-	status  bool
+	status  string
 	retries int
 }
 
@@ -49,6 +50,12 @@ func init() {
 
 }
 
+func hash(s string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
+}
+
 func Nodes(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -72,13 +79,14 @@ func main() {
 
 	for _, host := range strings.Split(hosts, ",") {
 
-		conn, err := net.Dial("tcp", host)
-		defer conn.Close()
+		//conn, err := net.Dial("tcp", host)
+		_, err := net.Dial("tcp", host)
+		//defer conn.Close()
 
-		nodes[host] = NodeStatus{status: true, retries: 0}
+		nodes[host] = NodeStatus{status: "up", retries: 0}
 		if err != nil {
 			clog.Error(err)
-			nodes[host] = NodeStatus{status: false, retries: 0}
+			nodes[host] = NodeStatus{status: "down", retries: 0}
 			break
 		}
 	}
@@ -89,6 +97,7 @@ func main() {
 	for n := range nodes {
 		servers = append(servers, n)
 	}
+	sort.Strings(servers)	
 
 	fmt.Printf("%#v\n", nodes)
 
@@ -96,7 +105,7 @@ func main() {
 
 	//TODO - fix it
 	for i := 0; i < nodeCount; i++ {
-		if i % 2 == 0 {
+		if hash(servers[i])  % 2 == 0 {
 			vbmap[0] = append(vbmap[0], servers[i])
 		} else { 
 			vbmap[1] = append(vbmap[1], servers[i])
@@ -104,7 +113,8 @@ func main() {
 	}
 
 	bucketMap["serverList"] = hosts 
-	bucketMap["luxmap"] = strings.Join(vbmap[0], ";") + "," + strings.Join(vbmap[1], ";")
+	//bucketMap["luxmap"] = strings.Join(vbmap[0], ";") + "," + strings.Join(vbmap[1], ";")
+	bucketMap["luxmap"] = "0:" + strings.Join(vbmap[0], ";") + ", 1:" + strings.Join(vbmap[1], ";")
 
 	fmt.Println("vbmap:", bucketMap)
 
@@ -112,20 +122,23 @@ func main() {
 	go func() {
 		for {
 			for node, _ := range nodes {
-				conn, err := net.Dial(node)
-				defer conn.Close()
-				nodes[node] = NodeStatus{status: true, retries: 0}
+				_, err := net.Dial("tcp", node)
+				//conn, err := net.Dial("tcp", node)
+				//defer conn.Close()
 				
 				if err != nil {
 					clog.Error(err)
+					fmt.Println("retry count:", nodes[node].retries, " node:", node)
 					retryCount := nodes[node].retries + 1
 
 					if retryCount <= 3 {
-						nodes[node] = NodeStatus{status: false, retries: retryCount}
+						nodes[node] = NodeStatus{status: "down", retries: retryCount}
 					} else {
 						delete(nodes, node)
 					}
 					break
+				} else {
+					nodes[node] = NodeStatus{status: "up", retries: 0}
 				}
 			}
 
@@ -134,14 +147,14 @@ func main() {
 			for n := range nodes {
 				servers = append(servers, n)
 			}
-		
+			sort.Strings(servers)	
 			fmt.Printf("%#v\n", nodes)
 		
 			vbmap = make(map[int][]string)
 		
 			//TODO - fix it
 			for i := 0; i < nodeCount; i++ {
-				if i % 2 == 0 {
+				if hash(servers[i]) % 2 == 0 {
 					vbmap[0] = append(vbmap[0], servers[i])
 				} else { 
 					vbmap[1] = append(vbmap[1], servers[i])
@@ -149,8 +162,8 @@ func main() {
 			}
 		
 			bucketMap["serverList"] = strings.Join(servers, ",") 
-			bucketMap["luxmap"] = strings.Join(vbmap[0], ";") + "," + strings.Join(vbmap[1], ";")
-			//bucketMap["luxmap"] = "0:" + strings.Join(vbmap[0], ";" + ", 1:" + strings.Join(vbmap[1], ";")
+			//bucketMap["luxmap"] = strings.Join(vbmap[0], ";") + "," + strings.Join(vbmap[1], ";")
+			bucketMap["luxmap"] = "0:" + strings.Join(vbmap[0], ";") + ", 1:" + strings.Join(vbmap[1], ";")
 			fmt.Printf("%#v\n", nodes)
 			time.Sleep(time.Second)
 		}
