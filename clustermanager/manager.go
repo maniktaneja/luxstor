@@ -16,7 +16,7 @@ import (
 	"github.com/couchbaselabs/clog"
 )
 
-const vbucketCount=2
+const vbucketCount = 2
 
 type NodeStatus struct {
 	status  string
@@ -24,17 +24,16 @@ type NodeStatus struct {
 }
 
 type vbucketMap struct {
-	id int
+	id    int
 	nodes []string
 }
 
-
 var (
-	address string
-	port    int
-	logPath string
-	hosts   string
-	nodes   = make(map[string]NodeStatus)
+	address   string
+	port      int
+	logPath   string
+	hosts     string
+	nodes     = make(map[string]NodeStatus)
 	bucketMap = make(map[string]string)
 )
 
@@ -90,14 +89,14 @@ func main() {
 			break
 		}
 	}
-	
+
 	nodeCount := len(nodes)
 
 	servers := make([]string, 0, nodeCount)
 	for n := range nodes {
 		servers = append(servers, n)
 	}
-	sort.Strings(servers)	
+	sort.Strings(servers)
 
 	fmt.Printf("%#v\n", nodes)
 
@@ -105,14 +104,14 @@ func main() {
 
 	//TODO - fix it
 	for i := 0; i < nodeCount; i++ {
-		if hash(servers[i])  % 2 == 0 {
+		if hash(servers[i])%2 == 0 {
 			vbmap[0] = append(vbmap[0], servers[i])
-		} else { 
+		} else {
 			vbmap[1] = append(vbmap[1], servers[i])
 		}
 	}
 
-	bucketMap["serverList"] = hosts 
+	bucketMap["serverList"] = hosts
 	//bucketMap["luxmap"] = strings.Join(vbmap[0], ";") + "," + strings.Join(vbmap[1], ";")
 	bucketMap["luxmap"] = "0:" + strings.Join(vbmap[0], ";") + ", 1:" + strings.Join(vbmap[1], ";")
 
@@ -125,7 +124,7 @@ func main() {
 				_, err := net.Dial("tcp", node)
 				//conn, err := net.Dial("tcp", node)
 				//defer conn.Close()
-				
+
 				if err != nil {
 					clog.Error(err)
 					fmt.Println("retry count:", nodes[node].retries, " node:", node)
@@ -147,21 +146,21 @@ func main() {
 			for n := range nodes {
 				servers = append(servers, n)
 			}
-			sort.Strings(servers)	
+			sort.Strings(servers)
 			fmt.Printf("%#v\n", nodes)
-		
+
 			vbmap = make(map[int][]string)
-		
+
 			//TODO - fix it
 			for i := 0; i < nodeCount; i++ {
-				if hash(servers[i]) % 2 == 0 {
+				if hash(servers[i])%2 == 0 {
 					vbmap[0] = append(vbmap[0], servers[i])
-				} else { 
+				} else {
 					vbmap[1] = append(vbmap[1], servers[i])
 				}
 			}
-		
-			bucketMap["serverList"] = strings.Join(servers, ",") 
+
+			bucketMap["serverList"] = strings.Join(servers, ",")
 			//bucketMap["luxmap"] = strings.Join(vbmap[0], ";") + "," + strings.Join(vbmap[1], ";")
 			bucketMap["luxmap"] = "0:" + strings.Join(vbmap[0], ";") + ", 1:" + strings.Join(vbmap[1], ";")
 			fmt.Printf("%#v\n", nodes)

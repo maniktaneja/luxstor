@@ -5,7 +5,7 @@ import (
 	"hash/fnv"
 	"strings"
 
-	"github.com/maniktaneja/luxstor/clustermanager"
+	"github.com/maniktaneja/luxstor/clusterclient"
 )
 
 const vbucketCount = 2
@@ -13,9 +13,9 @@ const vbucketCount = 2
 func getVbucketNode(vbid int) string {
 	var vbmap string
 	//Connect to cluster manager
-	vbmap, _ = clustermanager.Connect("http://localhost:8091/nodes")
+	vbmap, _ = client.Connect("http://localhost:8091/nodes")
 	nodes := strings.Split(vbmap, ",")
-	return nodes[vbid]	
+	return nodes[vbid]
 }
 
 func getHash(key string) uint32 {
