@@ -14,7 +14,7 @@ type storage struct {
 	cas  uint64
 }
 
-type handler func(req *gomemcached.MCRequest, s *luxStor) *gomemcached.MCResponse
+type handler func(req *gomemcached.MCRequest, s *luxStor, id int) *gomemcached.MCResponse
 
 var handlers = map[gomemcached.CommandCode]handler{
 	gomemcached.SET:    handleSet,
@@ -26,6 +26,7 @@ var handlers = map[gomemcached.CommandCode]handler{
 type luxStor struct {
 	memdb     *memstore.MemStore
 	workQueue *lfreequeue.Queue
+	writers   []*memstore.Writer
 }
 
 // init memdb
@@ -36,6 +37,9 @@ func initMemdb() *luxStor {
 	ls := &luxStor{memdb: memstore.New()}
 	ls.memdb.SetKeyComparator(byteItemKeyCompare)
 	ls.workQueue = lfreequeue.NewQueue()
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+		ls.writers = append(ls.writers, ls.memdb.NewWriter())
+	}
 
 	// create a queue of writers
 	for i := 0; i < 128; i++ {
@@ -48,8 +52,8 @@ func initMemdb() *luxStor {
 
 func worker(id int, jobs <-chan *job) {
 	for j := range jobs {
-		log.Printf("Worker id %d", id)
-		j.res <- dispatch(j.req, j.s)
+		//log.Printf("Worker id %d", id)
+		j.res <- dispatch(j.req, j.s, id)
 	}
 }
 
@@ -65,8 +69,8 @@ func RunServer(input chan chanReq) {
 	//s.data = make(map[string]gomemcached.MCItem)
 	s = initMemdb()
 
-	jobQueue := make(chan *job, 100)
-	for i := 0; i < runtime.NumCPU()*2; i++ {
+	jobQueue := make(chan *job, 500000)
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
 		go worker(i, jobQueue)
 	}
 
@@ -82,9 +86,9 @@ func RunServer(input chan chanReq) {
 	}
 }
 
-func dispatch(req *gomemcached.MCRequest, s *luxStor) (rv *gomemcached.MCResponse) {
+func dispatch(req *gomemcached.MCRequest, s *luxStor, id int) (rv *gomemcached.MCResponse) {
 	if h, ok := handlers[req.Opcode]; ok {
-		rv = h(req, s)
+		rv = h(req, s, id)
 	} else {
 		return notFound(req, s)
 	}
@@ -97,7 +101,7 @@ func notFound(req *gomemcached.MCRequest, s *luxStor) *gomemcached.MCResponse {
 	return &response
 }
 
-func handleSet(req *gomemcached.MCRequest, s *luxStor) (ret *gomemcached.MCResponse) {
+func handleSet(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemcached.MCResponse) {
 	ret = &gomemcached.MCResponse{}
 
 	/*
@@ -113,58 +117,19 @@ func handleSet(req *gomemcached.MCRequest, s *luxStor) (ret *gomemcached.MCRespo
 	data := newByteItem(req.Key, req.Body)
 	itm := memstore.NewItem(data)
 
-	var worker *memstore.Writer
-	var w interface{}
-	var done bool
-
-	i := 0
-	for {
-		w, done = s.workQueue.Dequeue()
-		if done == true {
-			break
-		}
-		i++
-	}
-
-	switch w := w.(type) {
-	case *memstore.Writer:
-		worker = w
-	default:
-		log.Printf("Not good !")
-	}
-
-	worker.Put(itm)
-	s.workQueue.Enqueue(worker)
+	w := s.writers[id]
+	w.Put(itm)
 
 	return
 }
 
-func handleGet(req *gomemcached.MCRequest, s *luxStor) (ret *gomemcached.MCResponse) {
+func handleGet(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemcached.MCResponse) {
 	ret = &gomemcached.MCResponse{}
-
-	var worker *memstore.Writer
-	var w interface{}
-	var done bool
-
-	for {
-		w, done = s.workQueue.Dequeue()
-		if done == true {
-			break
-		}
-	}
-
-	switch w := w.(type) {
-	case *memstore.Writer:
-		worker = w
-	default:
-		log.Printf("Not good !")
-	}
-
-	defer s.workQueue.Enqueue(worker)
 
 	data := newByteItem(req.Key, nil)
 	itm := memstore.NewItem(data)
-	gotItm := worker.Get(itm)
+	w := s.writers[id]
+	gotItm := w.Get(itm)
 	if gotItm == nil {
 		ret.Status = gomemcached.KEY_ENOENT
 	} else {
@@ -176,7 +141,7 @@ func handleGet(req *gomemcached.MCRequest, s *luxStor) (ret *gomemcached.MCRespo
 	return
 }
 
-func handleFlush(req *gomemcached.MCRequest, s *luxStor) (ret *gomemcached.MCResponse) {
+func handleFlush(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemcached.MCResponse) {
 	ret = &gomemcached.MCResponse{}
 	delay := binary.BigEndian.Uint32(req.Extras)
 	if delay > 0 {
@@ -186,7 +151,7 @@ func handleFlush(req *gomemcached.MCRequest, s *luxStor) (ret *gomemcached.MCRes
 	return
 }
 
-func handleDelete(req *gomemcached.MCRequest, s *luxStor) (ret *gomemcached.MCResponse) {
+func handleDelete(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemcached.MCResponse) {
 	ret = &gomemcached.MCResponse{}
 	//delete(s.data, string(req.Key))
 	return

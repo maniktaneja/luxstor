@@ -39,7 +39,7 @@ func connectionHandler(s net.Conn, h memcached.RequestHandler) {
 }
 
 func waitForConnections(ls net.Listener) {
-	reqChannel := make(chan chanReq)
+	reqChannel := make(chan chanReq, 100000)
 
 	go RunServer(reqChannel)
 	handler := &reqHandler{reqChannel}
