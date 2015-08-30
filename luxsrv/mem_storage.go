@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
 	"github.com/couchbase/gomemcached"
 	"github.com/maniktaneja/luxstor/memstore"
 	"github.com/maniktaneja/luxstor/replica"
@@ -22,6 +23,7 @@ var handlers = map[gomemcached.CommandCode]handler{
 	gomemcached.GET:    handleGet,
 	gomemcached.DELETE: handleDelete,
 	gomemcached.FLUSH:  handleFlush,
+	gomemcached.STAT:   handleStat,
 }
 
 type luxStor struct {
@@ -29,6 +31,13 @@ type luxStor struct {
 	workQueue *lfreequeue.Queue
 	writers   []*memstore.Writer
 }
+
+type luxStats struct {
+	Gets uint64
+	Sets uint64
+}
+
+var luxstats luxStats
 
 // init memdb
 func initMemdb() *luxStor {
@@ -115,13 +124,25 @@ func handleSet(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemcached
 		ret.Cas = s.cas
 	*/
 
-	replica.QueueRemoteWrite(req)
+	flags := binary.BigEndian.Uint32(req.Extras)
+	// flags == 0 is a normal write and must be replicated
+	if flags == 0 {
+		if replica.IsOwner(req) != true {
+			// nothing more to be done
+			replica.ProxyRemoteWrite(req)
+			return
+		} else {
+			replica.QueueRemoteWrite(req)
+		}
+	}
 
 	data := newByteItem(req.Key, req.Body)
 	itm := memstore.NewItem(data)
 
 	w := s.writers[id]
 	w.Put(itm)
+
+	luxstats.Sets++
 
 	return
 }
@@ -140,6 +161,18 @@ func handleGet(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemcached
 		ret.Body = bItem.Value()
 		ret.Status = gomemcached.SUCCESS
 	}
+
+	luxstats.Gets++
+
+	return
+}
+
+func handleStat(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemcached.MCResponse) {
+	ret = &gomemcached.MCResponse{}
+
+	stats := fmt.Sprintf("Sets: %d, Gets %d", luxstats.Sets, luxstats.Gets)
+	ret.Body = []byte(stats)
+	ret.Status = gomemcached.SUCCESS
 
 	return
 }

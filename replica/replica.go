@@ -18,6 +18,9 @@ var repChan chan *repItem
 var connPool map[string]*connectionPool
 var ipList []string
 
+const OP_SET = 0x01
+const OP_REP = 0x02
+
 func Init(url string) {
 	repChan = make(chan *repItem, 100000)
 	ipList := GetMyIp()
@@ -68,10 +71,12 @@ func GetMyIp() []string {
 }
 
 type repItem struct {
-	host string
-	req  *gomemcached.MCRequest
+	host   string
+	req    *gomemcached.MCRequest
+	opcode int
 }
 
+// return true if data needs to be written here
 func QueueRemoteWrite(req *gomemcached.MCRequest) {
 
 	key := req.Key
@@ -100,7 +105,47 @@ func QueueRemoteWrite(req *gomemcached.MCRequest) {
 
 	log.Printf("Found remote node %s", remoteNode)
 
-	ri := &repItem{host: remoteNode, req: req}
+	ri := &repItem{host: remoteNode, req: req, opcode: OP_REP}
+	repChan <- ri
+	return
+}
+
+func IsOwner(req *gomemcached.MCRequest) bool {
+
+	key := req.Key
+	nodeList := getVbucketNode(int(findShard(string(key))))
+	nodes := strings.Split(nodeList, ";")
+
+	if len(nodes) < 1 {
+		log.Fatal("Nodelist is empty. Cannot proceed")
+	}
+
+	for _, node := range nodes {
+		hostname := strings.Split(node, ":")
+		for _, ip := range ipList {
+			if ip == hostname[0] {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// we are not the master of this node, so proxy
+func ProxyRemoteWrite(req *gomemcached.MCRequest) {
+
+	key := req.Key
+	nodeList := getVbucketNode(int(findShard(string(key))))
+	nodes := strings.Split(nodeList, ";")
+
+	if len(nodes) < 1 {
+		log.Fatal("Nodelist is empty. Cannot proceed")
+	}
+
+	log.Printf("Found remote node %s", nodes[0])
+
+	ri := &repItem{host: nodes[0], req: req, opcode: OP_SET}
 	repChan <- ri
 	return
 }
@@ -116,6 +161,8 @@ func drainQueue() {
 			pool = newConnectionPool(item.host, 64, 128)
 			connPool[item.host] = pool
 		}
+
+		flags := 0
 		cp, err := pool.Get()
 		if err != nil {
 			log.Printf(" Cannot get connection from pool %v", err)
@@ -123,7 +170,10 @@ func drainQueue() {
 			goto done
 		}
 
-		res, err = cp.Set(0, string(item.req.Key), 0, 0, item.req.Body)
+		if item.opcode == OP_REP {
+			flags = 1
+		}
+		res, err = cp.Set(0, string(item.req.Key), flags, 0, item.req.Body)
 		if err != nil || res.Status != gomemcached.SUCCESS {
 			log.Printf("Set failed. Error %v", err)
 			goto done
