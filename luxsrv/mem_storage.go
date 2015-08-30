@@ -19,11 +19,12 @@ type storage struct {
 type handler func(req *gomemcached.MCRequest, s *luxStor, id int) *gomemcached.MCResponse
 
 var handlers = map[gomemcached.CommandCode]handler{
-	gomemcached.SET:    handleSet,
-	gomemcached.GET:    handleGet,
-	gomemcached.DELETE: handleDelete,
-	gomemcached.FLUSH:  handleFlush,
-	gomemcached.GAT:    handleStat,
+	gomemcached.SET:           handleSet,
+	gomemcached.GET:           handleGet,
+	gomemcached.DELETE:        handleDelete,
+	gomemcached.FLUSH:         handleFlush,
+	gomemcached.GAT:           handleStat,
+	gomemcached.SELECT_BUCKET: handleSnapshot,
 }
 
 type luxStor struct {
@@ -146,6 +147,24 @@ func handleSet(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemcached
 
 	luxstats.Sets++
 
+	return
+}
+
+func handleSnapshot(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemcached.MCResponse) {
+	ret = &gomemcached.MCResponse{}
+
+	var sn uint32
+
+	fmt.Println("Received snapshot request", string(req.Key))
+
+	if string(req.Key) == "create-snapshot" {
+		snap := s.memdb.NewSnapshot()
+		fmt.Println("Created snapshot", snap)
+	} else if n, err := fmt.Sscanf(string(req.Key), "rollback-snapshot %d", &sn); err == nil && n == 1 {
+		snap := memstore.SnapshotFromSn(sn)
+		fmt.Println("Rollback to snapshot", snap)
+		s.memdb.Rollback(snap)
+	}
 	return
 }
 
