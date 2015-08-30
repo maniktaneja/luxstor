@@ -135,8 +135,6 @@ func handleSet(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemcached
 		} else {
 			replica.QueueRemoteWrite(req)
 		}
-	} else {
-		log.Printf(" Writing to local disk")
 	}
 
 	data := newByteItem(req.Key, req.Body)
