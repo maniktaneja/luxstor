@@ -156,11 +156,45 @@ func ProxyRemoteWrite(req *gomemcached.MCRequest) {
 		log.Fatal("Nodelist is empty. Cannot proceed")
 	}
 
-	log.Printf("Found remote proxy node %s", nodes[0])
-
 	ri := &repItem{host: nodes[0], req: req, opcode: OP_SET}
 	repChan <- ri
 	return
+}
+
+// we are not the master of this node, so proxy
+func ProxyRemoteRead(req *gomemcached.MCRequest) *gomemcached.MCResponse {
+
+	key := req.Key
+	nodeList := getVbucketNode(int(findShard(string(key))))
+	nodes := strings.Split(nodeList, ";")
+	var res *gomemcached.MCResponse
+
+	if len(nodes) < 1 {
+		log.Fatal("Nodelist is empty. Cannot proceed")
+	}
+
+	pool, ok := connPool[nodes[0]]
+	if ok == false {
+		pool = newConnectionPool(nodes[0], 64, 128)
+		connPool[nodes[0]] = pool
+	}
+
+	cp, err := pool.Get()
+	if err != nil {
+		log.Printf(" Cannot get connection from pool %v", err)
+		// should retry or giveup TODO
+		goto done
+	}
+
+	res, err = cp.Get(0, string(req.Key))
+	if err != nil || res.Status != gomemcached.SUCCESS {
+		log.Printf("Set failed. Error %v", err)
+		goto done
+	}
+done:
+	pool.Return(cp)
+
+	return res
 }
 
 func drainQueue() {

@@ -134,6 +134,8 @@ func handleSet(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemcached
 		} else {
 			replica.QueueRemoteWrite(req)
 		}
+	} else {
+		log.Printf(" Writing to local disk")
 	}
 
 	data := newByteItem(req.Key, req.Body)
@@ -149,6 +151,10 @@ func handleSet(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemcached
 
 func handleGet(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemcached.MCResponse) {
 	ret = &gomemcached.MCResponse{}
+
+	if replica.IsOwner(req) != true {
+		return replica.ProxyRemoteRead(req)
+	}
 
 	data := newByteItem(req.Key, nil)
 	itm := memstore.NewItem(data)
