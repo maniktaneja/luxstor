@@ -22,11 +22,11 @@ var readRatio = flag.Int("ratio", 4, "read ratio vs write")
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 func RandStringRunes(n int) string {
-    b := make([]rune, n)
-    for i := range b {
-        b[i] = letterRunes[rand.Intn(len(letterRunes))]
-    }
-    return string(b)
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
 }
 
 func main() {
@@ -49,9 +49,10 @@ func main() {
 
 		c = append(c, client)
 	}
-	
-	data := RandStringRunes(*size) 
+
+	data := RandStringRunes(*size)
 	now := time.Now()
+	docPerThread := *documentCount / runtime.GOMAXPROCS(0)
 
 	for j := 0; j < *threadCount; j++ {
 		wg.Add(1)
@@ -59,9 +60,8 @@ func main() {
 			defer wg.Done()
 			client := c[offset]
 
-			for i := 0; i < *documentCount; i++ {
-
-				docid := i + offset**documentCount
+			for i := 0; i < docPerThread; i++ {
+				docid := i + offset*docPerThread
 				res, err := client.Set(0, "test"+string(docid), 0, 0, []byte(data))
 				if err != nil || res.Status != gomemcached.SUCCESS {
 					log.Printf("Set failed. Error %v", err)
@@ -76,14 +76,14 @@ func main() {
 					}
 				}
 			}
-			
+
 		}(j)
 	}
 
 	wg.Wait()
 	elapsed := time.Since(now)
-	ops := runtime.GOMAXPROCS(0) * *documentCount
-	log.Printf("sets:%d, gets:%d time_taken:%v\n", ops, ops * *readRatio, elapsed)
+	ops := runtime.GOMAXPROCS(0) * docPerThread
+	log.Printf("sets:%d, gets:%d time_taken:%v\n", ops, ops**readRatio, elapsed)
 
 	//log.Printf("Get returned %v", res)
 }
