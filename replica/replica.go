@@ -22,7 +22,7 @@ const OP_SET = 0x01
 const OP_REP = 0x02
 
 func Init(url string) {
-	repChan = make(chan *repItem, 100000)
+	repChan = make(chan *repItem, 10000000)
 	ipList = GetMyIp()
 	if len(ipList) < 1 {
 		log.Printf("Warning, iplist is empty")
