@@ -31,6 +31,7 @@ func Init(url string) {
 }
 
 func getVbucketNode(vbid int) string {
+	log.Printf(" node id %d", vbid)
 	var vbmap string
 	//Connect to cluster manager
 	vbmap = client.GetMap()
@@ -92,8 +93,6 @@ func QueueRemoteWrite(req *gomemcached.MCRequest) {
 		return
 	}
 
-	log.Printf(" Nodes %v len ", nodes, len(nodes))
-
 	var remoteNode string
 	// figure out which is the remote host and queue to the write to that node
 	for _, node := range nodes {
@@ -123,7 +122,6 @@ func IsOwner(req *gomemcached.MCRequest) bool {
 	nodeList := getVbucketNode(int(findShard(string(key))))
 	nodes := strings.Split(nodeList, ";")
 
-	log.Printf(" Nodes list %v key %s", nodes, string(key))
 	if strings.Contains(nodes[0], "localhost") || strings.Contains(nodes[0], "127.0.0.1") || nodes[0] == "" {
 		return true
 	}

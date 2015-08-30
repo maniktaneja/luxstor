@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/json"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"time"
 )
@@ -21,6 +22,7 @@ func RunClient(clusterURL string) {
 		resp, err := http.Get(clusterURL)
 		if err != nil {
 			nodeMap = ""
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
@@ -29,6 +31,7 @@ func RunClient(clusterURL string) {
 
 		var nodes Map
 		json.Unmarshal([]byte(string(body)), &nodes)
+		log.Printf(" got nodes %v", nodes)
 		nodeMap = nodes.Node.LuxMap
 		time.Sleep(1 * time.Second)
 	}
