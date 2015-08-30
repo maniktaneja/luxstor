@@ -160,6 +160,7 @@ func handleSnapshot(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemc
 	if string(req.Key) == "create-snapshot" {
 		snap := s.memdb.NewSnapshot()
 		fmt.Println("Created snapshot", snap)
+		ret.Body = []byte(snap.String())
 	} else if n, err := fmt.Sscanf(string(req.Key), "rollback-snapshot %d", &sn); err == nil && n == 1 {
 		snap := memstore.SnapshotFromSn(sn)
 		fmt.Println("Rollback to snapshot", snap)
