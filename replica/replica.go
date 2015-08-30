@@ -111,8 +111,6 @@ func QueueRemoteWrite(req *gomemcached.MCRequest) {
 		}
 	}
 
-	log.Printf("Found replica remote node %s", remoteNode)
-
 	ri := &repItem{host: remoteNode, req: req, opcode: OP_REP}
 	repChan <- ri
 	return
