@@ -92,6 +92,8 @@ func QueueRemoteWrite(req *gomemcached.MCRequest) {
 		return
 	}
 
+	log.Printf(" Nodes %v len ", nodes, len(nodes))
+
 	var remoteNode string
 	// figure out which is the remote host and queue to the write to that node
 	for _, node := range nodes {
@@ -108,7 +110,7 @@ func QueueRemoteWrite(req *gomemcached.MCRequest) {
 		}
 	}
 
-	log.Printf("Found remote node %s", remoteNode)
+	log.Printf("Found replica remote node %s", remoteNode)
 
 	ri := &repItem{host: remoteNode, req: req, opcode: OP_REP}
 	repChan <- ri
@@ -120,6 +122,11 @@ func IsOwner(req *gomemcached.MCRequest) bool {
 	key := req.Key
 	nodeList := getVbucketNode(int(findShard(string(key))))
 	nodes := strings.Split(nodeList, ";")
+
+	log.Printf(" Nodes list %v key %s", nodes, string(key))
+	if strings.Contains(nodes[0], "localhost") || strings.Contains(nodes[0], "127.0.0.1") || nodes[0] == "" {
+		return true
+	}
 
 	if len(nodes) < 1 {
 		log.Fatal("Nodelist is empty. Cannot proceed")
@@ -148,7 +155,7 @@ func ProxyRemoteWrite(req *gomemcached.MCRequest) {
 		log.Fatal("Nodelist is empty. Cannot proceed")
 	}
 
-	log.Printf("Found remote node %s", nodes[0])
+	log.Printf("Found remote proxy node %s", nodes[0])
 
 	ri := &repItem{host: nodes[0], req: req, opcode: OP_SET}
 	repChan <- ri

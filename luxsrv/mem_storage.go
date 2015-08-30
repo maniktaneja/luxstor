@@ -23,7 +23,7 @@ var handlers = map[gomemcached.CommandCode]handler{
 	gomemcached.GET:    handleGet,
 	gomemcached.DELETE: handleDelete,
 	gomemcached.FLUSH:  handleFlush,
-	gomemcached.STAT:   handleStat,
+	gomemcached.GAT:    handleStat,
 }
 
 type luxStor struct {
