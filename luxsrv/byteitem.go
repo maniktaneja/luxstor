@@ -33,18 +33,11 @@ func (b *byteItem) Value() []byte {
 }
 
 func byteItemKeyCompare(a, b []byte) int {
-	var l int
 	itm1 := byteItem(a)
 	itm2 := byteItem(b)
 
 	k1 := []byte(itm1)[2:itm1.valOffset()]
 	k2 := []byte(itm2)[2:itm2.valOffset()]
 
-	if len(k1) > len(k2) {
-		l = len(k2)
-	} else {
-		l = len(k1)
-	}
-
-	return bytes.Compare(k1[:l], k2[:l])
+	return bytes.Compare(k1, k2)
 }
