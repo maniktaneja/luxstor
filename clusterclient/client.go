@@ -21,10 +21,11 @@ func RunClient(clusterURL string) {
 		resp, err := http.Get(clusterURL)
 		if err != nil {
 			nodeMap = ""
+			continue
 		}
 
-		defer resp.Body.Close()
 		body, err := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
 
 		var nodes Map
 		json.Unmarshal([]byte(string(body)), &nodes)
