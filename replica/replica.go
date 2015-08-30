@@ -87,6 +87,11 @@ func QueueRemoteWrite(req *gomemcached.MCRequest) {
 		log.Fatal("Nodelist is empty. Cannot proceed")
 	}
 
+	if len(nodes) < 2 {
+		//no replica
+		return
+	}
+
 	var remoteNode string
 	// figure out which is the remote host and queue to the write to that node
 	for _, node := range nodes {
