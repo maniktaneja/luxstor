@@ -61,15 +61,15 @@ func main() {
 			client := c[offset]
 
 			for i := 0; i < docPerThread; i++ {
-				docid := i + offset*docPerThread
-				res, err := client.Set(0, "test"+string(docid), 0, 0, []byte(data))
+				docid := fmt.Sprintf("doc-%d", i+offset*docPerThread)
+				res, err := client.Set(0, docid, 0, 0, []byte(data))
 				if err != nil || res.Status != gomemcached.SUCCESS {
 					log.Printf("Set failed. Error %v", err)
 					return
 				}
 
 				for k := 0; k < *readRatio; k++ {
-					res, err := client.Get(0, "test"+string(docid))
+					res, err := client.Get(0, docid)
 					if err != nil || res.Status != gomemcached.SUCCESS {
 						log.Printf("Get failed. Error %v", err)
 						return
