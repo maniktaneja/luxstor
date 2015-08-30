@@ -3,6 +3,7 @@ package memstore
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/rand"
 	"sync/atomic"
 )
@@ -177,11 +178,21 @@ func (m *MemStore) NewWriter() *Writer {
 	}
 }
 
+func SnapshotFromSn(sn uint32) *Snapshot {
+	return &Snapshot{
+		sn: sn,
+	}
+}
+
 type Snapshot struct {
 	sn       uint32
 	refCount int32
 	db       *MemStore
 	count    int64
+}
+
+func (s *Snapshot) String() string {
+	return fmt.Sprint(s.sn)
 }
 
 func (s Snapshot) Count() int64 {
