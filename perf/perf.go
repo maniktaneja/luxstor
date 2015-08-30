@@ -61,14 +61,15 @@ func main() {
 
 			for i := 0; i < *documentCount; i++ {
 
-				res, err := client.Set(0, "test"+string(i), 0, 0, []byte(data))
+				docid := i + offset**documentCount
+				res, err := client.Set(0, "test"+string(docid), 0, 0, []byte(data))
 				if err != nil || res.Status != gomemcached.SUCCESS {
 					log.Printf("Set failed. Error %v", err)
 					return
 				}
-			
+
 				for k := 0; k < *readRatio; k++ {
-					res, err := client.Get(0, "test"+string(i))
+					res, err := client.Get(0, "test"+string(docid))
 					if err != nil || res.Status != gomemcached.SUCCESS {
 						log.Printf("Get failed. Error %v", err)
 						return
