@@ -1,70 +1,95 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	"github.com/couchbase/gomemcached"
-	"github.com/couchbase/gomemcached/client"
-	"log"
-	"runtime"
-	"sync"
-	"time"
+        "flag"
+        "fmt"
+        "github.com/couchbase/gomemcached"
+        "github.com/couchbase/gomemcached/client"
+        "log"
+        "runtime"
+        "sync"
+        "time"
+        "math/rand"
 )
 
 var server = flag.String("server", "localhost", "server URL")
 var port = flag.Int("server port", 11212, "server port")
 
+func init() {
+    rand.Seed(time.Now().UnixNano())
+}
+
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func RandStringRunes(n int) string {
+    b := make([]rune, n)
+    for i := range b {
+        b[i] = letterRunes[rand.Intn(len(letterRunes))]
+    }
+    return string(b)
+}
+
+
 func main() {
 
-	var wg sync.WaitGroup
+        flag.Parse()
+        var wg sync.WaitGroup
 
-	memServer := fmt.Sprintf("%s:%d", *server, *port)
+        runtime.GOMAXPROCS(4)
 
-	log.Printf(" Connected to server %v", memServer)
+        memServer := fmt.Sprintf("%s:%d", *server, *port)
 
-	var c []*memcached.Client
+        log.Printf(" Connected to server %v", memServer)
 
-	for j := 0; j < runtime.GOMAXPROCS(0); j++ {
-		client, err := memcached.Connect("tcp", memServer)
-		if err != nil {
-			log.Printf(" Unable to connect to %v, error %v", memServer, err)
-			return
-		}
+        var c []*memcached.Client
 
-		c = append(c, client)
-	}
-	n := 100000
-	now := time.Now()
-	for j := 0; j < runtime.GOMAXPROCS(0); j++ {
-		wg.Add(1)
-		go func(offset int) {
-			defer wg.Done()
-			client := c[offset]
+        data := RandStringRunes(512)
 
-			for i := 0; i < n; i++ {
+        for j := 0; j < runtime.GOMAXPROCS(0); j++ {
+                client, err := memcached.Connect("tcp", memServer)
+                if err != nil {
+                        log.Printf(" Unable to connect to %v, error %v", memServer, err)
+                        return
+                }
 
-				res, err := client.Set(0, "test"+string(i), 0, 0, []byte("this is a test"))
-				if err != nil || res.Status != gomemcached.SUCCESS {
-					log.Printf("Set failed. Error %v", err)
-					return
-				}
+                c = append(c, client)
+        }
+        n := 10000000
+        now := time.Now()
+        for j := 0; j < runtime.GOMAXPROCS(0); j++ {
+                wg.Add(1)
+                go func(offset int) {
+                        defer wg.Done()
+                        client := c[offset]
 
-				res, err = client.Get(0, "test"+string(i))
-				if err != nil || res.Status != gomemcached.SUCCESS {
-					log.Printf("Get failed. Error %v", err)
-					return
-				}
+                        for i := 0; i < n; i++ {
 
-				//				log.Printf(" Time %v", elapsed)
-			}
-		}(j)
-	}
+                                res, err := client.Set(0, "test"+string(i), 0, 0, []byte(data))
+                                if err != nil || res.Status != gomemcached.SUCCESS {
+                                        log.Printf("Set failed. Error %v", err)
+                                        return
+                                }
+                        }
 
-	wg.Wait()
-	elapsed := time.Since(now)
-	ops := runtime.GOMAXPROCS(0) * n
-	log.Printf("sets:%d, gets:%d time_taken:%v\n", ops, ops, elapsed)
+                        for {
+                                i := rand.Intn(1000000)
+                                res, err := client.Get(0, "test"+string(i))
+                                if err != nil || res.Status != gomemcached.SUCCESS {
+                                        log.Printf("Get failed. Error %v", err)
+                                        return
+                                }
 
-	//log.Printf("Get returned %v", res)
+                                //                              log.Printf(" Time %v", elapsed)
+                        }
+                }(j)
+        }
+
+        wg.Wait()
+        elapsed := time.Since(now)
+        ops := runtime.GOMAXPROCS(0) * n
+        log.Printf("sets:%d, gets:%d time_taken:%v\n", ops, ops, elapsed)
+
+        //log.Printf("Get returned %v", res)
 
 }
+
