@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"github.com/couchbase/gomemcached"
 	"github.com/maniktaneja/luxstor/memstore"
+	"github.com/maniktaneja/luxstor/replica"
 	"github.com/scryner/lfreequeue"
 	"log"
 	"runtime"
@@ -113,6 +114,8 @@ func handleSet(req *gomemcached.MCRequest, s *luxStor, id int) (ret *gomemcached
 		item.Cas = s.cas
 		ret.Cas = s.cas
 	*/
+
+	replica.QueueRemoteWrite(req)
 
 	data := newByteItem(req.Key, req.Body)
 	itm := memstore.NewItem(data)

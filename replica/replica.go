@@ -72,7 +72,7 @@ type repItem struct {
 	req  *gomemcached.MCRequest
 }
 
-func QueueRemoteWrite(host string, req *gomemcached.MCRequest) {
+func QueueRemoteWrite(req *gomemcached.MCRequest) {
 
 	key := req.Key
 	nodeList := getVbucketNode(int(findShard(string(key))))
