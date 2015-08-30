@@ -23,11 +23,13 @@ const OP_REP = 0x02
 
 func Init(url string) {
 	repChan = make(chan *repItem, 100000)
-	ipList := GetMyIp()
+	ipList = GetMyIp()
 	if len(ipList) < 1 {
 		log.Printf("Warning, iplist is empty")
 	}
+	connPool = make(map[string]*connectionPool)
 	go client.RunClient(url + "/nodes")
+	go drainQueue()
 }
 
 func getVbucketNode(vbid int) string {
